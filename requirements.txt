@@ -1,0 +1,14 @@
+numpy
+scipy
+plotly
+pandas
+matplotlib~=3.8.0
+pyqt5~=5.15.9
+pyqt5designer
+pyqtgraph~=0.13.3
+opencv-contrib-python
+imutils~=0.5.4
+psutil~=5.9.6
+sty
+PySide6
+
