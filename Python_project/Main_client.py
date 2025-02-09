@@ -41,7 +41,7 @@ class MainApp(QMainWindow):
         super(MainApp, self).__init__()
         uic.loadUi("Main_window.ui", self)
 
-        # Prepojenie tlačidiel so štartom a stop
+        # Prepojenie tlačidiel
         self.Start_button.clicked.connect(self.start_measurement)
         self.Stop_button.clicked.connect(self.stop_measurement)
         self.inputs_pushButton.clicked.connect(self.open_input_dialog)
@@ -51,7 +51,7 @@ class MainApp(QMainWindow):
         self.client_thread = None
 
         #incialiazacia pociatocnych hodnot
-        self.Priemer.setValue(80)  # Nastaví hodnotu
+        self.Priemer.setValue(80)
         self.Dlzka.setValue(1000)
         self.Youngov_modul.setValue(210)
         self.Re_mat.setValue(600)
@@ -75,27 +75,27 @@ class MainApp(QMainWindow):
         layout3.addWidget(self.force_graph)
 
     def open_input_dialog(self):
-        """Otvorí dialógové okno a aktualizuje hodnoty po potvrdení."""
+        # otvori dialog a aktualizuje
         dialog = QDialog(self)
         ui = Ui_Dialog()
         ui.setupUi(dialog)
 
-        # Nastavenie aktuálnych hodnôt do dialógu
+        # Nastavenie aktual hodnot v dialog
         ui.Amplituda_doubleSpinBox.setValue(self.amplitude)
         ui.Frekvencia_doubleSpinBox.setValue(self.omega)
 
-        # Prepojenie tlačidiel Apply a Close
+        # Prepojenie tlacidiel
         ui.Apply_pushButton.clicked.connect(lambda: self.update_values(ui, dialog))
         ui.Close_pushButton.clicked.connect(dialog.close)
 
-        if dialog.exec_():  # Ak užívateľ stlačí OK, uložíme hodnoty
+        if dialog.exec_():  # ok uloz
             self.update_values(ui, dialog)
 
     def update_values(self, ui, dialog):
-        """Aktualizuje hodnoty po potvrdení dialógu."""
+        # aktualizuje hodnoty po ok v dialog
         self.amplitude = ui.Amplituda_doubleSpinBox.value()
         self.omega = ui.Frekvencia_doubleSpinBox.value()
-        dialog.accept()  # Zavrie dialóg
+        dialog.accept()  # close dialog
 
     def start_measurement(self):
         self.Stop_button.setEnabled(True)
@@ -116,28 +116,28 @@ class MainApp(QMainWindow):
         if not self.running:
             self.running = True
 
-            A = self.amplitude  # Použi hodnotu uloženú v self.amplitude
+            A = self.amplitude
             f = self.omega
 
             # Spustenie servera v novom vlákne
             self.server_thread = threading.Thread(target=run_server, args=(A, f), daemon=True)
             self.server_thread.start()
-            time.sleep(2)  # Počkame na spustenie servera
+            time.sleep(2)  # spustenie servera
 
             # Spustenie klienta
             self.start_client()
 
     def stop_measurement(self):
-        """Zastaví meranie a vypne server"""
+        #stop measure and server
         self.running = False
         self.Stop_button.setEnabled(False)
 
         with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
-            sock.sendto(b"STOP", (HOST, PORT))  # Pošleme serveru príkaz na vypnutie
+            sock.sendto(b"STOP", (HOST, PORT))  # server stop
 
 
     def start_client(self):
-        """Spustí klienta v novom vlákne"""
+        #klient v novom vlakne
         self.client_thread = threading.Thread(target=self.run_client, daemon=True)
         self.client_thread.start()
 
@@ -153,7 +153,6 @@ class MainApp(QMainWindow):
             prev_acc = 0.0
             last_time = time.time()
             velocity_drift = 0.0
-
 
             acc_data = []
             vel_data = []
@@ -214,9 +213,9 @@ class MainApp(QMainWindow):
                         stress_data.pop(0)
                         time_data.pop(0)
 
-                        # ========== Graf napätia ==========
+                        # Graf napätia
                         if not hasattr(self, '_stress_line'):
-                            # Vytvoríme krivku napätia a horizontálnu červenú čiaru na hodnote self.save
+                            # krivku napatia a horizontalnu red line na pre self.save
                             self._stress_line, = self.stress_graph.ax.plot([], [], label="Napätie (MPa)")
                             self._save_line = self.stress_graph.ax.axhline(self.save, color='r', linestyle='--',
                                                                            label='Maximalne dovolene napätie')
@@ -239,7 +238,7 @@ class MainApp(QMainWindow):
                         self.stress_graph.ax.autoscale_view()
                         self.stress_graph.draw()
 
-                        # ========== Graf integrácie (acc, vel, pos) ==========
+                        #Graf integrácie
                         if len(self.integration_graph.ax.lines) == 0:
                             self.integration_graph.ax.plot([], [], label="Zrýchlenie (mm/s²)")
                             self.integration_graph.ax.plot([], [], label="Rýchlosť (mm/s)")
@@ -256,13 +255,13 @@ class MainApp(QMainWindow):
                         self.integration_graph.ax.autoscale_view()
                         self.integration_graph.draw()
 
-                        # ========== Graf sily ==========
+                        # Graf sily
                         if len(self.force_graph.ax.lines) == 0:
                             self.force_graph.ax.plot([], [], label="Sila (N)", color='r')
                             # Popis osí a legenda
                             self.force_graph.ax.set_xlabel("Čas [s]")
                             self.force_graph.ax.set_ylabel("Sila [N]")
-                            self.force_graph.ax.legend()
+                            #self.force_graph.ax.legend()
 
                         self.force_graph.ax.lines[0].set_data(time_data, force_data)
                         self.force_graph.ax.relim()
