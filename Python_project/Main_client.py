@@ -141,12 +141,11 @@ class MainApp(QMainWindow):
 
     def run_client(self):
         with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
-            sock.settimeout(1)  # Timeout na prijímanie údajov
+            sock.settimeout(1)
             position = 0.0
             velocity = 0.0
-            time_offset = 0.0  # Posun časovej osi pre kontinuálne dáta
+            time_offset = 0.0
 
-            # Inicializácia dátových polí pre historické hodnoty
             self.time_data = []
             self.acc_data = []
             self.vel_data = []
@@ -156,61 +155,66 @@ class MainApp(QMainWindow):
 
             while self.running:
                 try:
-                    # Pošleme požiadavku na novú periódu dát
                     sock.sendto(b"request", (HOST, PORT))
-                    data, _ = sock.recvfrom(65536)  # Zvýšený buffer pre celú periódu
+                    data, _ = sock.recvfrom(65536)
 
-                    # Konverzia prijatých dát na zoznam čísel
                     data_str = data.decode().strip()
-                    acc_values = [float(val) for val in data_str.split()]
+                    lines = data_str.split("\n")
 
-                    dt = DT  # Konštantný krok z definície
+                    if not lines:
+                        print("Chyba: Prijaté prázdne dáta!")
+                        continue
 
-                    # **Odstránenie DC biasu zo zrýchlenia**
-                    acc_mean = sum(acc_values) / len(acc_values)
-                    acc_values = [a - acc_mean for a in acc_values]
+                    times, acc_values = [], []
+                    for line in lines:
+                        try:
+                            t, a = map(float, line.split())
+                            times.append(t)
+                            acc_values.append(a)
+                        except ValueError:
+                            print(f"Chyba parsovania riadka: {line}")
+                            continue
 
-                    velocity_values = [velocity]  # Začneme s poslednou hodnotou
-                    position_values = [position]
+                    num_samples = len(acc_values)
+                    if num_samples == 0:
+                        print("Chyba: Žiadne vzorky akcelerácie!")
+                        continue
 
-                    # **Dvojitá integrácia zrýchlenia**
-                    for acc in acc_values:
-                        new_velocity = velocity_values[-1] + acc * dt
+                    # 🔵 PRVÁ INTEGRÁCIA: Akcelerácia -> Rýchlosť (trapezoidná metóda)
+                    velocity_values = [velocity]
+                    for i in range(1, num_samples):
+                        dt = times[i] - times[i - 1]
+                        new_velocity = velocity_values[-1] + 0.5 * (acc_values[i] + acc_values[i - 1]) * dt
                         velocity_values.append(new_velocity)
 
-                        new_position = position_values[-1] + new_velocity * dt
-                        position_values.append(new_position)
-
-                    # **Odstránenie DC biasu z rýchlosti**
+                    # ✅ Korekcia driftu rýchlosti (odstránenie priemernej hodnoty)
                     vel_mean = sum(velocity_values) / len(velocity_values)
                     velocity_values = [v - vel_mean for v in velocity_values]
 
-                    # **Reintegrácia polohy so skorigovanou rýchlosťou**
+                    # 🔵 DRUHÁ INTEGRÁCIA: Rýchlosť -> Poloha (trapezoidná metóda)
                     position_values = [position]
-                    for v in velocity_values:
-                        new_position = position_values[-1] + v * dt
+                    for i in range(1, num_samples):
+                        dt = times[i] - times[i - 1]
+                        new_position = position_values[-1] + 0.5 * (velocity_values[i] + velocity_values[i - 1]) * dt
                         position_values.append(new_position)
 
-                    # Odstránenie prvého bodu (začiatok bol predchádzajúca hodnota)
-                    velocity_values.pop(0)
-                    position_values.pop(0)
+                    # ✅ Korekcia driftu polohy (odstránenie priemernej hodnoty)
+                    pos_mean = sum(position_values) / len(position_values)
+                    position_values = [p - pos_mean for p in position_values]
 
-                    # Aktualizácia posledných hodnôt pre ďalšiu iteráciu
                     velocity = velocity_values[-1]
                     position = position_values[-1]
 
-                    # Výpočty síl a napätí
                     force_values = [(3 * self.E * self.I * pos) / (self.L ** 3) for pos in position_values]
                     moment_values = [force * self.L for force in force_values]
                     sigma_values = [(moment * self.y_max) / self.I for moment in moment_values]
                     tau_values = [2 * (force / self.Area) for force in force_values]
                     stress_values = [(sigma ** 2 + 3 * tau ** 2) ** 0.5 for sigma, tau in zip(sigma_values, tau_values)]
 
-                    # Generovanie časovej osi pre periódu s kontinuálnym posunom
-                    time_values = [time_offset + i * dt for i in range(len(acc_values))]
-                    time_offset = time_values[-1] + dt  # Posun na ďalší segment
+                    # 🕒 Časová os
+                    time_values = [time_offset + (t - times[0]) for t in times]
+                    time_offset = time_values[-1] + (times[1] - times[0])
 
-                    # Pridanie dát do historických zoznamov
                     self.time_data.extend(time_values)
                     self.acc_data.extend(acc_values)
                     self.vel_data.extend(velocity_values)
@@ -218,7 +222,7 @@ class MainApp(QMainWindow):
                     self.force_data.extend(force_values)
                     self.stress_data.extend(stress_values)
 
-                    # Orezanie starých dát, aby sa zabránilo preťaženiu grafu
+                    # 📉 Limit počtu bodov v grafe
                     MAX_POINTS = 5000
                     if len(self.time_data) > MAX_POINTS:
                         self.time_data = self.time_data[-MAX_POINTS:]
@@ -228,7 +232,6 @@ class MainApp(QMainWindow):
                         self.force_data = self.force_data[-MAX_POINTS:]
                         self.stress_data = self.stress_data[-MAX_POINTS:]
 
-                    # Aktualizácia grafov
                     self.update_graphs(
                         self.time_data, self.acc_data, self.vel_data,
                         self.pos_data, self.force_data, self.stress_data
