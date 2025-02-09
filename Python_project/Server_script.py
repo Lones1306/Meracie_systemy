@@ -10,14 +10,14 @@ PORT = 12345
 dt = 0.001  # Časový krok
 
 def run_server(A, f):
-    """Spustí UDP server a posiela periódy signálu v reálnom čase."""
+    #spusti server
     if f <= 0:
         print("Chyba: Frekvencia musí byť väčšia ako 0!")
         return
 
     omega = 2 * math.pi * f
-    T = 1 / f  # Perióda signálu
-    num_samples = int(T / dt)  # Počet vzoriek na periódu
+    T = 1 / f  # Perióda
+    num_samples = int(T / dt)
 
     with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
         sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
@@ -39,7 +39,7 @@ def run_server(A, f):
                     t_values = np.linspace(0, T, num_samples, endpoint=False)  # Rovnomerné časové vzorky
                     acc_values = A * np.sin(omega * t_values)
 
-                    # Posielame dáta v tvare "čas akcelerácia" pre každú vzorku
+                    # Posielame dáta v tvare acc, t pre každú vzorku
                     data_str = "\n".join(f"{t:.6f} {a:.6f}" for t, a in zip(t_values, acc_values))
                     sock.sendto(data_str.encode(), addr)
 
@@ -53,6 +53,6 @@ def run_server(A, f):
         print("Server bol bezpečne ukončený.")
 
 if __name__ == "__main__":
-    A, f = 1.0, 1.0  # Tu môže byť zmenené podľa potreby
+    A, f = 1.0, 1.0
     server_thread = threading.Thread(target=run_server, args=(A, f), daemon=True)
     server_thread.start()
