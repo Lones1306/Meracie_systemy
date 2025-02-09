@@ -143,11 +143,10 @@ class MainApp(QMainWindow):
 
     def run_client(self):
         DAMPING_FACTOR = 0.98  # Tlmenie na redukciu driftovania
-        POSITION_CORRECTION = 0.9  # Dodatočné tlmenie posunutia
         HIGH_PASS_ALPHA = 0.96  # HP filter pre rýchlosť
-        LOW_PASS_ALPHA = 0.995  # LP filter pre polohu (zabráni dlhodobému driftu)
         TRAPEZOIDAL = True  # Použijeme metódu trapézov
-        POSITION_CORRECTION_GAIN = 0.01  # P-regulátor na kompenzáciu driftu polohy
+        POSITION_CORRECTION_GAIN = 0.008  # Miernejšia korekcia polohy
+        POSITION_INTEGRAL_GAIN = 0.00005
 
         with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
             sock.settimeout(0.01)
@@ -156,6 +155,7 @@ class MainApp(QMainWindow):
             velocity_drift = 0.0
             position_drift = 0.0
             prev_acc = 0.0
+            position_integral = 0.0
             last_time = time.time()
 
             acc_data = []
@@ -196,9 +196,11 @@ class MainApp(QMainWindow):
                         position += velocity * dt
 
                     # Korekcia driftu polohy (slabý LP filter + P regulátor)
-                    position_drift = LOW_PASS_ALPHA * position_drift + (1 - LOW_PASS_ALPHA) * position
-                    position -= position_drift
-                    position -= POSITION_CORRECTION_GAIN * position  # Slabá spätná väzba na nulovanie driftu
+                    position_integral += position * dt
+                    position -= POSITION_CORRECTION_GAIN * position + POSITION_INTEGRAL_GAIN * position_integral
+
+                    prev_acc = acc
+
 
                     # Výpočet síl a napätí
                     force = (3 * self.E * self.I * position) / (self.L ** 3)
