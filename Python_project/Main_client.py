@@ -97,6 +97,8 @@ class MainApp(QMainWindow):
 
     def start_measurement(self):
         self.Stop_button.setEnabled(True)
+        self.inputs_pushButton.setDisabled(True)
+        self.Start_button.setDisabled(True)
 
         # mechanicke vlastnosti
         self.Re = self.Re_mat.value()
@@ -128,7 +130,9 @@ class MainApp(QMainWindow):
     def stop_measurement(self):
         #Zastaví meranie a vypne server
         self.running = False
-        self.Stop_button.setEnabled(False)
+        self.Start_button.setEnabled(True)
+        self.inputs_pushButton.setEnabled(True)
+        self.Stop_button.setDisabled(True)
 
         with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
             sock.sendto(b"STOP", (HOST, PORT))  # server stop
@@ -180,25 +184,25 @@ class MainApp(QMainWindow):
                         print("Chyba: Žiadne vzorky akcelerácie!")
                         continue
 
-                    # 🔵 PRVÁ INTEGRÁCIA: Akcelerácia -> Rýchlosť (trapezoidná metóda)
+                    # Rýchlosť (trapezoidná metóda)
                     velocity_values = [velocity]
                     for i in range(1, num_samples):
                         dt = times[i] - times[i - 1]
                         new_velocity = velocity_values[-1] + 0.5 * (acc_values[i] + acc_values[i - 1]) * dt
                         velocity_values.append(new_velocity)
 
-                    # ✅ Korekcia driftu rýchlosti (odstránenie priemernej hodnoty)
+                    #Korekcia driftu rýchlosti
                     vel_mean = sum(velocity_values) / len(velocity_values)
                     velocity_values = [v - vel_mean for v in velocity_values]
 
-                    # 🔵 DRUHÁ INTEGRÁCIA: Rýchlosť -> Poloha (trapezoidná metóda)
+                    #  Poloha (trapezoidná metóda)
                     position_values = [position]
                     for i in range(1, num_samples):
                         dt = times[i] - times[i - 1]
                         new_position = position_values[-1] + 0.5 * (velocity_values[i] + velocity_values[i - 1]) * dt
                         position_values.append(new_position)
 
-                    # ✅ Korekcia driftu polohy (odstránenie priemernej hodnoty)
+                    #Korekcia driftu polohy
                     pos_mean = sum(position_values) / len(position_values)
                     position_values = [p - pos_mean for p in position_values]
 
@@ -211,7 +215,7 @@ class MainApp(QMainWindow):
                     tau_values = [2 * (force / self.Area) for force in force_values]
                     stress_values = [(sigma ** 2 + 3 * tau ** 2) ** 0.5 for sigma, tau in zip(sigma_values, tau_values)]
 
-                    # 🕒 Časová os
+                    # Časová os
                     time_values = [time_offset + (t - times[0]) for t in times]
                     time_offset = time_values[-1] + (times[1] - times[0])
 
@@ -222,7 +226,7 @@ class MainApp(QMainWindow):
                     self.force_data.extend(force_values)
                     self.stress_data.extend(stress_values)
 
-                    # 📉 Limit počtu bodov v grafe
+                    #Limit počtu bodov v grafe
                     MAX_POINTS = 5000
                     if len(self.time_data) > MAX_POINTS:
                         self.time_data = self.time_data[-MAX_POINTS:]
