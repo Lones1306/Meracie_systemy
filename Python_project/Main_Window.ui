@@ -213,6 +213,19 @@
            </spacer>
           </item>
           <item>
+           <spacer name="verticalSpacer">
+            <property name="orientation">
+             <enum>Qt::Vertical</enum>
+            </property>
+            <property name="sizeHint" stdset="0">
+             <size>
+              <width>20</width>
+              <height>40</height>
+             </size>
+            </property>
+           </spacer>
+          </item>
+          <item>
            <widget class="QFrame" name="frame_2">
             <property name="frameShape">
              <enum>QFrame::StyledPanel</enum>
@@ -222,48 +235,9 @@
             </property>
             <layout class="QVBoxLayout" name="verticalLayout_2">
              <item>
-              <widget class="QLabel" name="label_2">
+              <widget class="QPushButton" name="inputs_pushButton">
                <property name="text">
-                <string>Amplituda</string>
-               </property>
-              </widget>
-             </item>
-             <item>
-              <widget class="QDoubleSpinBox" name="Amplituda">
-               <property name="acceptDrops">
-                <bool>true</bool>
-               </property>
-               <property name="maximum">
-                <double>100000.000000000000000</double>
-               </property>
-              </widget>
-             </item>
-             <item>
-              <widget class="QLabel" name="label_7">
-               <property name="text">
-                <string>Omega</string>
-               </property>
-              </widget>
-             </item>
-             <item>
-              <widget class="QDoubleSpinBox" name="Omega">
-               <property name="mouseTracking">
-                <bool>true</bool>
-               </property>
-               <property name="acceptDrops">
-                <bool>true</bool>
-               </property>
-               <property name="accessibleName">
-                <string/>
-               </property>
-               <property name="autoFillBackground">
-                <bool>false</bool>
-               </property>
-               <property name="wrapping">
-                <bool>false</bool>
-               </property>
-               <property name="frame">
-                <bool>true</bool>
+                <string>Vstupny signal</string>
                </property>
               </widget>
              </item>

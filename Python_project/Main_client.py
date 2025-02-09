@@ -4,7 +4,8 @@ import socket
 import time
 import numpy as np
 from PyQt5 import QtWidgets, uic
-from PyQt5.QtWidgets import QApplication, QMainWindow
+from PyQt5.QtWidgets import QApplication, QMainWindow, QDialog
+from Dialog_input import Ui_Dialog
 from PyQt5.QtWidgets import QListWidgetItem
 from PyQt5.QtWidgets import QWidget, QVBoxLayout
 from Server_script import run_server
@@ -13,10 +14,9 @@ from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.figure import Figure
 from scipy.signal import butter, filtfilt
 
-#   cd C:\Project\Python\Meracky\pythonProject
-#   pyside6-uic Main_Window.ui -o Main_Window.py
 #   py -m PyQt5.uic.pyuic -x Main_window.ui -o Main_window.py
-#   C:\Users\lones\AppData\Local\Programs\Python\Python312\Scripts\pyside6-uic Main_Window.ui -o Main_Window.py
+#   py -m PyQt5.uic.pyuic -x Dialog_input.ui -o Dialog_input.py
+
 
 HOST = '127.0.0.1'
 PORT = 12345
@@ -44,6 +44,7 @@ class MainApp(QMainWindow):
         # Prepojenie tlačidiel so štartom a stop
         self.Start_button.clicked.connect(self.start_measurement)
         self.Stop_button.clicked.connect(self.stop_measurement)
+        self.inputs_pushButton.clicked.connect(self.open_input_dialog)
 
         self.running = False
         self.server_thread = None
@@ -55,8 +56,8 @@ class MainApp(QMainWindow):
         self.Youngov_modul.setValue(210)
         self.Re_mat.setValue(600)
         self.Bezpecnost.setValue(1.5)
-        self.Amplituda.setValue(1)
-        self.Omega.setValue(1)
+        self.amplitude = 10000.0
+        self.omega = 1
 
         # Napojenie matplotlib grafov na QWidgety z Qt Designer
         self.stress_graph = MplCanvas(self.Graph_Stress)  # Nevolaj .canvas
@@ -72,6 +73,29 @@ class MainApp(QMainWindow):
 
         layout3 = QVBoxLayout(self.Graph_Force)
         layout3.addWidget(self.force_graph)
+
+    def open_input_dialog(self):
+        """Otvorí dialógové okno a aktualizuje hodnoty po potvrdení."""
+        dialog = QDialog(self)
+        ui = Ui_Dialog()
+        ui.setupUi(dialog)
+
+        # Nastavenie aktuálnych hodnôt do dialógu
+        ui.Amplituda_doubleSpinBox.setValue(self.amplitude)
+        ui.Frekvencia_doubleSpinBox.setValue(self.omega)
+
+        # Prepojenie tlačidiel Apply a Close
+        ui.Apply_pushButton.clicked.connect(lambda: self.update_values(ui, dialog))
+        ui.Close_pushButton.clicked.connect(dialog.close)
+
+        if dialog.exec_():  # Ak užívateľ stlačí OK, uložíme hodnoty
+            self.update_values(ui, dialog)
+
+    def update_values(self, ui, dialog):
+        """Aktualizuje hodnoty po potvrdení dialógu."""
+        self.amplitude = ui.Amplituda_doubleSpinBox.value()
+        self.omega = ui.Frekvencia_doubleSpinBox.value()
+        dialog.accept()  # Zavrie dialóg
 
     def start_measurement(self):
         self.Stop_button.setEnabled(True)
@@ -92,8 +116,8 @@ class MainApp(QMainWindow):
         if not self.running:
             self.running = True
 
-            A = self.Amplituda.value()  # Hodnota z QDoubleSpinBox
-            f = self.Omega.value()  # Hodnota z QDoubleSpinBo
+            A = self.amplitude  # Použi hodnotu uloženú v self.amplitude
+            f = self.omega
 
             # Spustenie servera v novom vlákne
             self.server_thread = threading.Thread(target=run_server, args=(A, f), daemon=True)
