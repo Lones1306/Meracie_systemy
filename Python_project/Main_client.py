@@ -99,6 +99,8 @@ class MainApp(QMainWindow):
 
     def start_measurement(self):
         self.Stop_button.setEnabled(True)
+        self.inputs_pushButton.setDisabled(True)
+        self.Start_button.setDisabled(True)
 
         # mechanicke vlastnosti
         self.Re = self.Re_mat.value()
@@ -130,7 +132,9 @@ class MainApp(QMainWindow):
     def stop_measurement(self):
         #stop measure and server
         self.running = False
-        self.Stop_button.setEnabled(False)
+        self.Start_button.setEnabled(True)
+        self.inputs_pushButton.setEnabled(True)
+        self.Stop_button.setDisabled(True)
 
         with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
             sock.sendto(b"STOP", (HOST, PORT))  # server stop
