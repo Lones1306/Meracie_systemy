@@ -129,6 +129,9 @@
                <property name="acceptDrops">
                 <bool>true</bool>
                </property>
+               <property name="maximum">
+                <double>10000.000000000000000</double>
+               </property>
               </widget>
              </item>
              <item>
@@ -144,7 +147,7 @@
                 <bool>true</bool>
                </property>
                <property name="maximum">
-                <double>9999.989999999999782</double>
+                <double>100000000.000000000000000</double>
                </property>
               </widget>
              </item>
