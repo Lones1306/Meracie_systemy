@@ -144,15 +144,19 @@ class MainApp(QMainWindow):
     def run_client(self):
         DAMPING_FACTOR = 0.98  # Tlmenie na redukciu driftovania
         POSITION_CORRECTION = 0.9  # Dodatočné tlmenie posunutia
-        HIGH_PASS_ALPHA = 0.96  # Faktor pre vysokopriepustný filter na rýchlosť
+        HIGH_PASS_ALPHA = 0.96  # HP filter pre rýchlosť
+        LOW_PASS_ALPHA = 0.995  # LP filter pre polohu (zabráni dlhodobému driftu)
+        TRAPEZOIDAL = True  # Použijeme metódu trapézov
+        POSITION_CORRECTION_GAIN = 0.01  # P-regulátor na kompenzáciu driftu polohy
 
         with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
-            sock.settimeout(0.01)  # Timeout prijímania údajov
+            sock.settimeout(0.01)
             position = 0.0
             velocity = 0.0
+            velocity_drift = 0.0
+            position_drift = 0.0
             prev_acc = 0.0
             last_time = time.time()
-            velocity_drift = 0.0
 
             acc_data = []
             vel_data = []
@@ -173,22 +177,28 @@ class MainApp(QMainWindow):
                     dt = current_time - last_time
                     last_time = current_time
 
-                    # Integrácia zrýchlenia na rýchlosť
-                    velocity += acc * dt  # Eulerova metóda bez prehnaného tlmenia
-                    velocity *= DAMPING_FACTOR
+                    # Integrácia zrýchlenia na rýchlosť (trapezoidálna metóda)
+                    if TRAPEZOIDAL:
+                        velocity += 0.5 * (acc + prev_acc) * dt
+                    else:
+                        velocity += acc * dt  # Eulerova metóda
 
-                    # Korekcia driftu rýchlosti
+                    velocity *= DAMPING_FACTOR  # Tlmenie driftu
+
+                    # Korekcia driftu rýchlosti (HP filter)
                     velocity_drift = HIGH_PASS_ALPHA * velocity_drift + (1 - HIGH_PASS_ALPHA) * velocity
                     velocity -= velocity_drift
 
-                    # Integrácia rýchlosti na polohu
-                    position += velocity * dt
+                    # Integrácia rýchlosti na polohu (trapezoidálna metóda)
+                    if TRAPEZOIDAL:
+                        position += 0.5 * (velocity + velocity_drift) * dt
+                    else:
+                        position += velocity * dt
 
-                    # Malé tlmenie polohy na redukciu driftu
-                    position *= POSITION_CORRECTION
-
-                    # Ukladanie dát na vizualizáciu
-                    prev_acc = acc
+                    # Korekcia driftu polohy (slabý LP filter + P regulátor)
+                    position_drift = LOW_PASS_ALPHA * position_drift + (1 - LOW_PASS_ALPHA) * position
+                    position -= position_drift
+                    position -= POSITION_CORRECTION_GAIN * position  # Slabá spätná väzba na nulovanie driftu
 
                     # Výpočet síl a napätí
                     force = (3 * self.E * self.I * position) / (self.L ** 3)
