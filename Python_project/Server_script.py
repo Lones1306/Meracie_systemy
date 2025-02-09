@@ -6,7 +6,7 @@ import math
 # Konfigurácia
 HOST = '127.0.0.1'
 PORT = 12345
-#TODO: omega robi nieco inak, neni priamo naviazana na pocet amplitud za sekundu
+
 
 # Globálne premené pre generovaný signál
 generated_signal = []
