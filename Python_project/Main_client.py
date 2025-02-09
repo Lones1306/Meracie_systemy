@@ -249,18 +249,21 @@ class MainApp(QMainWindow):
                     print(f"Chyba: {e}")
 
     def update_graphs(self, time_values, acc_values, velocity_values, position_values, force_values, stress_values):
-        # Aktualizuje grafy v GUI po každej perióde
+        # Zistí, či napätie prekročilo hranicu
+        max_stress = max(stress_values) if stress_values else 0
+        background_color = 'red' if max_stress > self.save else 'white'
 
         # Graf napätia
         self.stress_graph.ax.clear()
+        self.stress_graph.ax.set_facecolor(background_color)  # Nastavenie farby pozadia
         self.stress_graph.ax.plot(time_values, stress_values, label="Napätie (MPa)")
-        self.stress_graph.ax.axhline(self.save, color='r', linestyle='--', label='Maximalne dovolene napätie')
+        self.stress_graph.ax.axhline(self.save, color='r', linestyle='--', label='Maximálne dovolené napätie')
         self.stress_graph.ax.set_xlabel("Čas [s]")
         self.stress_graph.ax.set_ylabel("Napätie [MPa]")
         self.stress_graph.ax.legend()
         self.stress_graph.draw()
 
-        #Graf integrácie
+        # Graf integrácie
         self.integration_graph.ax.clear()
         self.integration_graph.ax.plot(time_values, acc_values, label="Zrýchlenie (mm/s²)")
         self.integration_graph.ax.plot(time_values, velocity_values, label="Rýchlosť (mm/s)")
@@ -269,12 +272,11 @@ class MainApp(QMainWindow):
         self.integration_graph.ax.legend()
         self.integration_graph.draw()
 
-        #Graf sily
+        # Graf sily
         self.force_graph.ax.clear()
         self.force_graph.ax.plot(time_values, force_values, label="Sila (N)", color='r')
         self.force_graph.ax.set_xlabel("Čas [s]")
         self.force_graph.ax.set_ylabel("Sila [N]")
-        #self.force_graph.ax.legend()
         self.force_graph.draw()
 
     def update_list_widgets(self, acc, vel, pos, force, stress):
