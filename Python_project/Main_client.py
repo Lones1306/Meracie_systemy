@@ -11,7 +11,7 @@ from Server_script import run_server
 from PyQt5.QtWidgets import QWidget
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.figure import Figure
-from scipy.signal import butter, filtfilt
+
 
 #   cd C:\Project\Python\Meracky\pythonProject
 #   pyside6-uic Main_Window.ui -o Main_Window.py
@@ -118,152 +118,135 @@ class MainApp(QMainWindow):
         self.client_thread.start()
 
     def run_client(self):
-        DAMPING_FACTOR = 0.98  # Tlmenie na redukciu driftovania
-        POSITION_CORRECTION = 0.9  # Dodatočné tlmenie posunutia
-        HIGH_PASS_ALPHA = 0.96  # Faktor pre vysokopriepustný filter na rýchlosť
-
         with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
-            sock.settimeout(0.01)  # Timeout prijímania údajov
+            sock.settimeout(1)  # Timeout na prijímanie údajov
             position = 0.0
             velocity = 0.0
-            prev_acc = 0.0
-            last_time = time.time()
-            velocity_drift = 0.0
+            time_offset = 0.0  # Posun časovej osi pre kontinuálne dáta
 
-
-            acc_data = []
-            vel_data = []
-            pos_data = []
-            force_data = []
-            stress_data = []
-            time_data = []
-            start_time = time.time()
+            # Inicializácia dátových polí pre historické hodnoty
+            self.time_data = []
+            self.acc_data = []
+            self.vel_data = []
+            self.pos_data = []
+            self.force_data = []
+            self.stress_data = []
 
             while self.running:
                 try:
+                    # Pošleme požiadavku na novú periódu dát
                     sock.sendto(b"request", (HOST, PORT))
-                    data, _ = sock.recvfrom(1024)
-                    acc = float(data.decode())
+                    data, _ = sock.recvfrom(65536)  # Zvýšený buffer pre celú periódu
 
-                    # Časový krok
-                    current_time = time.time()
-                    dt = current_time - last_time
-                    last_time = current_time
+                    # Konverzia prijatých dát na zoznam čísel
+                    data_str = data.decode().strip()
+                    acc_values = [float(val) for val in data_str.split()]
 
-                    # Integrácia zrýchlenia na rýchlosť
-                    velocity += acc * dt  # Eulerova metóda bez prehnaného tlmenia
-                    velocity *= DAMPING_FACTOR
+                    dt = DT  # Konštantný krok z definície
 
-                    # Korekcia driftu rýchlosti
-                    velocity_drift = HIGH_PASS_ALPHA * velocity_drift + (1 - HIGH_PASS_ALPHA) * velocity
-                    velocity -= velocity_drift
+                    # **Odstránenie DC biasu zo zrýchlenia**
+                    acc_mean = sum(acc_values) / len(acc_values)
+                    acc_values = [a - acc_mean for a in acc_values]
 
-                    # Integrácia rýchlosti na polohu
-                    position += velocity * dt
+                    velocity_values = [velocity]  # Začneme s poslednou hodnotou
+                    position_values = [position]
 
-                    # Malé tlmenie polohy na redukciu driftu
-                    position *= POSITION_CORRECTION
+                    # **Dvojitá integrácia zrýchlenia**
+                    for acc in acc_values:
+                        new_velocity = velocity_values[-1] + acc * dt
+                        velocity_values.append(new_velocity)
 
-                    # Ukladanie dát na vizualizáciu
-                    prev_acc = acc
+                        new_position = position_values[-1] + new_velocity * dt
+                        position_values.append(new_position)
 
-                    # Výpočet síl a napätí
-                    force = (3 * self.E * self.I * position) / (self.L ** 3)
-                    moment = force * self.L
-                    sigma = (moment * self.y_max) / self.I
-                    tau = 2 * (force / self.Area)
-                    stress = (sigma ** 2 + 3 * tau ** 2) ** 0.5
+                    # **Odstránenie DC biasu z rýchlosti**
+                    vel_mean = sum(velocity_values) / len(velocity_values)
+                    velocity_values = [v - vel_mean for v in velocity_values]
 
-                    # Ukladanie dát do listov
-                    acc_data.append(acc)
-                    vel_data.append(velocity)
-                    pos_data.append(position)
-                    force_data.append(force)
-                    stress_data.append(stress)
-                    time_data.append(current_time - start_time)
+                    # **Reintegrácia polohy so skorigovanou rýchlosťou**
+                    position_values = [position]
+                    for v in velocity_values:
+                        new_position = position_values[-1] + v * dt
+                        position_values.append(new_position)
 
-                    if len(acc_data) > 500:
-                        acc_data.pop(0)
-                        vel_data.pop(0)
-                        pos_data.pop(0)
-                        force_data.pop(0)
-                        stress_data.pop(0)
-                        time_data.pop(0)
+                    # Odstránenie prvého bodu (začiatok bol predchádzajúca hodnota)
+                    velocity_values.pop(0)
+                    position_values.pop(0)
 
-                        # ========== Graf napätia ==========
-                        if not hasattr(self, '_stress_line'):
-                            # Vytvoríme krivku napätia a horizontálnu červenú čiaru na hodnote self.save
-                            self._stress_line, = self.stress_graph.ax.plot([], [], label="Napätie (MPa)")
-                            self._save_line = self.stress_graph.ax.axhline(self.save, color='r', linestyle='--',
-                                                                           label='Maximalne dovolene napätie')
-                            self.stress_graph.ax.set_xlabel("Čas [s]")
-                            self.stress_graph.ax.set_ylabel("Napätie [MPa]")
-                            self.stress_graph.ax.legend()
+                    # Aktualizácia posledných hodnôt pre ďalšiu iteráciu
+                    velocity = velocity_values[-1]
+                    position = position_values[-1]
 
-                        # Aktualizujeme dáta pre krivku napätia
-                        self._stress_line.set_data(time_data, stress_data)
-                        # Aktualizujeme horizontálnu čiaru (v prípade, že by sa self.save menilo)
-                        self._save_line.set_ydata([self.save, self.save])
+                    # Výpočty síl a napätí
+                    force_values = [(3 * self.E * self.I * pos) / (self.L ** 3) for pos in position_values]
+                    moment_values = [force * self.L for force in force_values]
+                    sigma_values = [(moment * self.y_max) / self.I for moment in moment_values]
+                    tau_values = [2 * (force / self.Area) for force in force_values]
+                    stress_values = [(sigma ** 2 + 3 * tau ** 2) ** 0.5 for sigma, tau in zip(sigma_values, tau_values)]
 
-                        # Zmena pozadia grafu, ak napätie prekročí self.save
-                        if stress > self.save:
-                            self.stress_graph.ax.set_facecolor('red')
-                        else:
-                            self.stress_graph.ax.set_facecolor('white')
+                    # Generovanie časovej osi pre periódu s kontinuálnym posunom
+                    time_values = [time_offset + i * dt for i in range(len(acc_values))]
+                    time_offset = time_values[-1] + dt  # Posun na ďalší segment
 
-                        self.stress_graph.ax.relim()
-                        self.stress_graph.ax.autoscale_view()
-                        self.stress_graph.draw()
+                    # Pridanie dát do historických zoznamov
+                    self.time_data.extend(time_values)
+                    self.acc_data.extend(acc_values)
+                    self.vel_data.extend(velocity_values)
+                    self.pos_data.extend(position_values)
+                    self.force_data.extend(force_values)
+                    self.stress_data.extend(stress_values)
 
-                        # ========== Graf integrácie (acc, vel, pos) ==========
-                        if len(self.integration_graph.ax.lines) == 0:
-                            self.integration_graph.ax.plot([], [], label="Zrýchlenie (mm/s²)")
-                            self.integration_graph.ax.plot([], [], label="Rýchlosť (mm/s)")
-                            self.integration_graph.ax.plot([], [], label="Poloha (mm)")
-                            # Popis osí (bez Y) a legenda
-                            self.integration_graph.ax.set_xlabel("Čas [s]")
-                            # Nepíšeme set_ylabel -> ostane bez popisu
-                            self.integration_graph.ax.legend()
+                    # Orezanie starých dát, aby sa zabránilo preťaženiu grafu
+                    MAX_POINTS = 5000
+                    if len(self.time_data) > MAX_POINTS:
+                        self.time_data = self.time_data[-MAX_POINTS:]
+                        self.acc_data = self.acc_data[-MAX_POINTS:]
+                        self.vel_data = self.vel_data[-MAX_POINTS:]
+                        self.pos_data = self.pos_data[-MAX_POINTS:]
+                        self.force_data = self.force_data[-MAX_POINTS:]
+                        self.stress_data = self.stress_data[-MAX_POINTS:]
 
-                        self.integration_graph.ax.lines[0].set_data(time_data, acc_data)
-                        self.integration_graph.ax.lines[1].set_data(time_data, vel_data)
-                        self.integration_graph.ax.lines[2].set_data(time_data, pos_data)
-                        self.integration_graph.ax.relim()
-                        self.integration_graph.ax.autoscale_view()
-                        self.integration_graph.draw()
+                    # Aktualizácia grafov
+                    self.update_graphs(
+                        self.time_data, self.acc_data, self.vel_data,
+                        self.pos_data, self.force_data, self.stress_data
+                    )
 
-                        # ========== Graf sily ==========
-                        if len(self.force_graph.ax.lines) == 0:
-                            self.force_graph.ax.plot([], [], label="Sila (N)", color='r')
-                            # Popis osí a legenda
-                            self.force_graph.ax.set_xlabel("Čas [s]")
-                            self.force_graph.ax.set_ylabel("Sila [N]")
-                            self.force_graph.ax.legend()
-
-                        self.force_graph.ax.lines[0].set_data(time_data, force_data)
-                        self.force_graph.ax.relim()
-                        self.force_graph.ax.autoscale_view()
-                        self.force_graph.draw()
-
+                except ValueError as e:
+                    print(f"Chyba pri konverzii na čísla: {e}")
                 except socket.timeout:
                     print("Časový limit prijímania vypršal")
                 except Exception as e:
                     print(f"Chyba: {e}")
 
-                time.sleep(0.001)  # Počkame na ďalší cyklus
+    def update_graphs(self, time_values, acc_values, velocity_values, position_values, force_values, stress_values):
+        """Aktualizuje grafy v GUI po každej perióde"""
 
-    def update_graphs(self):
-        """Aktualizuje grafy v GUI"""
-        self.Integration.clear()
-        self.Force.clear()
-        self.stress.clear()
+        # ========== Graf napätia ==========
+        self.stress_graph.ax.clear()
+        self.stress_graph.ax.plot(time_values, stress_values, label="Napätie (MPa)")
+        self.stress_graph.ax.axhline(self.save, color='r', linestyle='--', label='Maximalne dovolene napätie')
+        self.stress_graph.ax.set_xlabel("Čas [s]")
+        self.stress_graph.ax.set_ylabel("Napätie [MPa]")
+        self.stress_graph.ax.legend()
+        self.stress_graph.draw()
 
-        # Vykreslenie grafov
-        self.acc_plot.setData(self.time_data, self.acc_data)
-        self.vel_plot.setData(self.time_data, self.vel_data)
-        self.pos_plot.setData(self.time_data, self.pos_data)
-        self.force_plot.setData(self.time_data, self.force_data)
-        self.stress_plot.setData(self.time_data, self.stress_data)
+        # ========== Graf integrácie (acc, vel, pos) ==========
+        self.integration_graph.ax.clear()
+        self.integration_graph.ax.plot(time_values, acc_values, label="Zrýchlenie (mm/s²)")
+        self.integration_graph.ax.plot(time_values, velocity_values, label="Rýchlosť (mm/s)")
+        self.integration_graph.ax.plot(time_values, position_values, label="Poloha (mm)")
+        self.integration_graph.ax.set_xlabel("Čas [s]")
+        self.integration_graph.ax.legend()
+        self.integration_graph.draw()
+
+        # ========== Graf sily ==========
+        self.force_graph.ax.clear()
+        self.force_graph.ax.plot(time_values, force_values, label="Sila (N)", color='r')
+        self.force_graph.ax.set_xlabel("Čas [s]")
+        self.force_graph.ax.set_ylabel("Sila [N]")
+        self.force_graph.ax.legend()
+        self.force_graph.draw()
 
     def update_list_widgets(self, acc, vel, pos, force, stress):
         """Aktualizuje QListWidget s novými hodnotami"""
