@@ -53,7 +53,7 @@
       <item row="0" column="0" colspan="3">
        <widget class="QLabel" name="label_2">
         <property name="text">
-         <string>Amplituda [mm]</string>
+         <string>Amplituda [mm/s^2]</string>
         </property>
        </widget>
       </item>

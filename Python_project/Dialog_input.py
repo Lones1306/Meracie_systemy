@@ -73,7 +73,7 @@ class Ui_Dialog(object):
     def retranslateUi(self, Dialog):
         _translate = QtCore.QCoreApplication.translate
         Dialog.setWindowTitle(_translate("Dialog", "Dialog"))
-        self.label_2.setText(_translate("Dialog", "Amplituda [mm]"))
+        self.label_2.setText(_translate("Dialog", "Amplituda [mm/s^2]"))
         self.label.setText(_translate("Dialog", "Frekvencia[Hz]"))
         self.Apply_pushButton.setText(_translate("Dialog", "Apply"))
         self.Close_pushButton.setText(_translate("Dialog", "Close"))

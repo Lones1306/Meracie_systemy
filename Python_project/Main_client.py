@@ -43,6 +43,7 @@ class MainApp(QMainWindow):
         self.Start_button.clicked.connect(self.start_measurement)
         self.Stop_button.clicked.connect(self.stop_measurement)
         self.inputs_pushButton.clicked.connect(self.open_input_dialog)
+        self.export_data.clicked.connect(self.exporting)
 
         self.running = False
         self.server_thread = None
@@ -52,9 +53,10 @@ class MainApp(QMainWindow):
         self.Priemer.setValue(80)
         self.Dlzka.setValue(1000)
         self.Youngov_modul.setValue(210)
-        self.Re_mat.setValue(600)
+        self.Re_mat.setValue(350)
         self.Bezpecnost.setValue(1.5)
-        self.amplitude = 10000.0
+        self.hustota.setValue(7850)
+        self.amplitude = 100000.0
         self.omega = 1
 
         # Napojenie matplotlib grafov na QWidgety z Qt Designer
@@ -95,16 +97,29 @@ class MainApp(QMainWindow):
         self.omega = ui.Frekvencia_doubleSpinBox.value()
         dialog.accept()  # Zavrie dialóg
 
+    def exporting(self):
+        with open("hitory_log.txt", "w") as file:
+            file.write("Time[s]\tAcceleration[mm/s^2]\tVelocity[[mm/s]]\tPosition[mm]\tForce[N]\tStress[MPa]\n")  # Hlavička
+
+            for i in range(len(self.time_data)):
+                file.write(f"{self.time_data[i]}\t{self.acc_data[i]}\t{self.vel_data[i]}\t"
+                           f"{self.pos_data[i]}\t{self.force_data[i]}\t{self.stress_data[i]}\n")
+
     def start_measurement(self):
         self.Stop_button.setEnabled(True)
         self.inputs_pushButton.setDisabled(True)
         self.Start_button.setDisabled(True)
+        self.export_data.setEnabled(True)
+
+        self.status_label.setText("V poriadku")
+        self.status_label.setStyleSheet("background-color: #0ff01e; color: black; font-weight: kerning;")
 
         # mechanicke vlastnosti
         self.Re = self.Re_mat.value()
         self.E = self.Youngov_modul.value()
         self.L = self.Dlzka.value()
         self.D = self.Priemer.value()
+        self.ro = self.hustota.value()
         self.d = self.D * 0.8
         self.I = ((3.1415 * self.D ** 4) / 64) - ((3.1415 * self.d ** 4) / 64)
         self.y_max = self.D / 2
@@ -112,6 +127,8 @@ class MainApp(QMainWindow):
         self.save = self.Re/self.k
         self.Jp = (3.1415/32)*((self.D**4)-(self.d**4))
         self.Area = 3.1415*((self.D**2-self.d**2)/4)
+        self.acc_zem = 9.81
+        self.zataz_g = self.ro*(self.Area/1000000)*self.acc_zem #[N/m]
 
         if not self.running:
             self.running = True
@@ -133,6 +150,7 @@ class MainApp(QMainWindow):
         self.Start_button.setEnabled(True)
         self.inputs_pushButton.setEnabled(True)
         self.Stop_button.setDisabled(True)
+        #self.export_data.setDisabled(True)
 
         with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
             sock.sendto(b"STOP", (HOST, PORT))  # server stop
@@ -207,10 +225,10 @@ class MainApp(QMainWindow):
                     position_values = [p - pos_mean for p in position_values]
 
                     velocity = velocity_values[-1]
-                    position = position_values[-1]
+                    position = position_values[-1]#/100
 
                     force_values = [(3 * self.E * self.I * pos) / (self.L ** 3) for pos in position_values]
-                    moment_values = [force * self.L for force in force_values]
+                    moment_values = [force * self.L+((self.zataz_g*(self.L/1000)**2)/2) for force in force_values]
                     sigma_values = [(moment * self.y_max) / self.I for moment in moment_values]
                     tau_values = [2 * (force / self.Area) for force in force_values]
                     stress_values = [(sigma ** 2 + 3 * tau ** 2) ** 0.5 for sigma, tau in zip(sigma_values, tau_values)]
@@ -252,6 +270,10 @@ class MainApp(QMainWindow):
         # Zistí, či napätie prekročilo hranicu
         max_stress = max(stress_values) if stress_values else 0
         background_color = 'red' if max_stress > self.save else 'white'
+
+        if max_stress > self.save:
+            self.status_label.setText("POZOR!")
+            self.status_label.setStyleSheet("background-color: red; color: white; font-weight: bold;")
 
         # Graf napätia
         self.stress_graph.ax.clear()
